@@ -12,8 +12,18 @@ int tokenize(tokens_t *tokens, const char *string)
 	unsigned int length, string_idx, data_idx, tokens_idx;
 	unsigned int skip_next, skip_quote;
 	unsigned int is_token;
+	unsigned int i, j;
 
 	char symbol;
+	token_types token_names[] = {
+    	{ TOKEN_SEMICOLON,  ";",  "semicolon" },
+    	{ TOKEN_PIPE,       "|",  "pipe" },
+    	{ TOKEN_REWRITE,    ">",  "rewrite" },
+    	{ TOKEN_APPEND,     ">>", "append" },
+    	{ TOKEN_CAT,        "<",  "cat" },
+    	{ TOKEN_BACKGROUND, "&",  "background" }
+	};
+	
 	/* First of all, we need to carefully allocate memory */
 	/* It does not matter if we allocate too much, it is better than constant reallocations, */
 	/* because they take too much time, and memory is not a concern */
@@ -50,7 +60,7 @@ int tokenize(tokens_t *tokens, const char *string)
 			/* Note that we'll handle ';' later, this is the special case */
 			/* New token has been started */
 			/* We need to set up pointer properly so it points to current location in data */
-			tokens->tokens[tokens_idx] = tokens->data + data_idx;
+			tokens->tokens[tokens_idx].str = tokens->data + data_idx;
 			tokens_idx++;
 			is_token = 1; /* The token has started. We need to process it carefully */
 		}
@@ -81,7 +91,7 @@ int tokenize(tokens_t *tokens, const char *string)
 			}
 
 			/* Next, we need to add new token */
-			tokens->tokens[tokens_idx] = tokens->data + data_idx;
+			tokens->tokens[tokens_idx].str = tokens->data + data_idx;
 			tokens_idx++;
 
 			/* And fill it with ';' */
@@ -122,6 +132,41 @@ int tokenize(tokens_t *tokens, const char *string)
 
 	/* Set current amount of tokens properly */
 	tokens->tokensN = tokens_idx;
+
+	/* Next - tokenize all tokens */
+	/* By default, every token is TOKEN_STRING, but in case if equals to some predefined token, */
+	/* its ID should change */
+	for (i = 0; i < tokens->tokensN; i++)
+	{
+		tokens->tokens[i].id = TOKEN_STRING; /* Set default value */
+		
+		/* Compare each token with pre-defined token names */
+		for (j = 0; j < sizeof(token_names) / sizeof(token_names[0]); j++)
+		{
+			if (strcmp(token_names[j].token_str, tokens->tokens[i].str) == 0)
+			{
+				/* It is a match */
+				tokens->tokens[i].id = token_names[j].token_id;
+				break; /* No need to cycle further here, we found corresponding token ID */
+			}
+		}
+	}
+	
+	/* The last thing we'll need to do here is to delete duplicates */
+	/* At the moment, we'll only need to delete ; token, turning ;; into ; */
+	for (i = 0; i + 1 < tokens->tokensN;)
+	{ /* The increment is inside of the cycle... or, rather, increment or decrement */
+		if ((tokens->tokens[i].id == tokens->tokens[i + 1].id) && (tokens->tokens[i].id == TOKEN_SEMICOLON))
+		{
+			/* Carefully shift the array one element */
+			unsigned tokens_to_move = tokens->tokensN - i - 1;
+			memmove(tokens->tokens + i, tokens->tokens + i + 1, tokens_to_move * sizeof(token_t));
+			
+			/* Also decrease amount of tokens left */
+			tokens->tokensN--;
+		} else
+			i++; /* Otherwise, cycle as usual */
+	}
 
 	return (0); /* All OK */
 }
